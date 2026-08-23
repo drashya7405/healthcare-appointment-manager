@@ -10,11 +10,15 @@ const CALENDAR_SCOPES = [
 /**
  * Returns a configured Google OAuth2 Client instance.
  */
-export function createOAuth2Client() {
+export function createOAuth2Client(customRedirectUri?: string) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri =
-    process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/api/auth/google/callback";
+    customRedirectUri ||
+    process.env.GOOGLE_REDIRECT_URI ||
+    (process.env.NEXT_PUBLIC_APP_URL
+      ? `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/api/auth/google/callback`
+      : "http://localhost:3000/api/auth/google/callback");
 
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
@@ -22,8 +26,8 @@ export function createOAuth2Client() {
 /**
  * Generates the Google OAuth consent URL with offline access and CSRF state token.
  */
-export function getGoogleAuthUrl(state: string): string {
-  const oauth2Client = createOAuth2Client();
+export function getGoogleAuthUrl(state: string, customRedirectUri?: string): string {
+  const oauth2Client = createOAuth2Client(customRedirectUri);
 
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
@@ -36,8 +40,11 @@ export function getGoogleAuthUrl(state: string): string {
 /**
  * Exchanges authorization code for access & refresh tokens and fetches connected email.
  */
-export async function exchangeGoogleCodeForTokens(code: string): Promise<GoogleTokens> {
-  const oauth2Client = createOAuth2Client();
+export async function exchangeGoogleCodeForTokens(
+  code: string,
+  customRedirectUri?: string
+): Promise<GoogleTokens> {
+  const oauth2Client = createOAuth2Client(customRedirectUri);
   const { tokens } = await oauth2Client.getToken(code);
 
   if (!tokens.access_token) {

@@ -5,51 +5,64 @@ import { prisma } from "@/database/prisma";
 import { exchangeGoogleCodeForTokens } from "@/lib/google/oauth";
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const code = searchParams.get("code");
-  const state = searchParams.get("state");
-  const error = searchParams.get("error");
-
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
-  if (error) {
-    return NextResponse.redirect(`${baseUrl}/doctor/dashboard?google_error=${encodeURIComponent(error)}`);
-  }
-
-  if (!code || !state) {
-    return NextResponse.redirect(`${baseUrl}/doctor/dashboard?google_error=missing_code_or_state`);
-  }
-
-  const cookieStore = await cookies();
-  const storedState = cookieStore.get("google_oauth_state")?.value;
-
-  // CSRF validation
-  if (!storedState || storedState !== state) {
-    return NextResponse.redirect(`${baseUrl}/doctor/dashboard?google_error=invalid_csrf_state`);
-  }
-
-  // Clear state cookie
-  cookieStore.delete("google_oauth_state");
-
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.redirect(`${baseUrl}/login?redirect=/doctor/dashboard`);
-  }
-
-  let doctorId: string | null = null;
-  if (user.role === "DOCTOR" && user.doctor) {
-    doctorId = user.doctor.id;
-  } else if (user.role === "ADMIN") {
-    const adminDoc = await prisma.doctor.findFirst({ where: { userId: user.id } });
-    doctorId = adminDoc?.id || null;
-  }
-
-  if (!doctorId) {
-    return NextResponse.redirect(`${baseUrl}/doctor/dashboard?google_error=no_doctor_profile`);
-  }
-
   try {
-    const tokens = await exchangeGoogleCodeForTokens(code);
+    const { searchParams } = request.nextUrl;
+    const code = searchParams.get("code");
+    const state = searchParams.get("state");
+    const error = searchParams.get("error");
+
+    if (error) {
+      const redirectUrl = new URL("/doctor/dashboard", request.url);
+      redirectUrl.searchParams.set("google_error", error);
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    if (!code || !state) {
+      const redirectUrl = new URL("/doctor/dashboard", request.url);
+      redirectUrl.searchParams.set("google_error", "missing_code_or_state");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    const cookieStore = await cookies();
+    const storedState = cookieStore.get("google_oauth_state")?.value;
+
+    // CSRF validation
+    if (!storedState || storedState !== state) {
+      const redirectUrl = new URL("/doctor/dashboard", request.url);
+      redirectUrl.searchParams.set("google_error", "invalid_csrf_state");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // Clear state cookie
+    cookieStore.delete("google_oauth_state");
+
+    const user = await getCurrentUser();
+    if (!user) {
+      const redirectUrl = new URL("/login", request.url);
+      redirectUrl.searchParams.set("redirect", "/doctor/dashboard");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    let doctorId: string | null = null;
+    if (user.role === "DOCTOR" && user.doctor) {
+      doctorId = user.doctor.id;
+    } else if (user.role === "ADMIN") {
+      const adminDoc = await prisma.doctor.findFirst({ where: { userId: user.id } });
+      doctorId = adminDoc?.id || null;
+    }
+
+    if (!doctorId) {
+      const redirectUrl = new URL("/doctor/dashboard", request.url);
+      redirectUrl.searchParams.set("google_error", "no_doctor_profile");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    const origin = request.nextUrl.origin;
+    const dynamicRedirectUri = `${origin}/api/auth/google/callback`;
+    const tokens = await exchangeGoogleCodeForTokens(
+      code,
+      process.env.GOOGLE_REDIRECT_URI || dynamicRedirectUri
+    );
 
     await prisma.calendarConnection.upsert({
       where: { doctorId },
@@ -74,10 +87,14 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.redirect(`${baseUrl}/doctor/dashboard?google_calendar=connected`);
+    const successUrl = new URL("/doctor/dashboard", request.url);
+    successUrl.searchParams.set("google_calendar", "connected");
+    return NextResponse.redirect(successUrl);
   } catch (err) {
     const errorMsg = (err as Error).message || "Token exchange failed";
     console.error("[Google OAuth Callback Error]:", errorMsg);
-    return NextResponse.redirect(`${baseUrl}/doctor/dashboard?google_error=${encodeURIComponent(errorMsg)}`);
+    const errorUrl = new URL("/doctor/dashboard", request.url);
+    errorUrl.searchParams.set("google_error", errorMsg);
+    return NextResponse.redirect(errorUrl);
   }
 }
