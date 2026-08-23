@@ -1,0 +1,257 @@
+// Phase 1 preliminary data model. No migration is created in this phase.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum AppointmentStatus {
+  BOOKED
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  RESCHEDULED
+  AFFECTED_BY_LEAVE
+  NO_SHOW
+}
+
+enum UrgencyLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String
+  passwordHash  String
+  role          UserRole
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  patient       Patient?
+  doctor        Doctor?
+  sessions      Session[]
+  notifications Notification[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionToken])
+}
+
+model Patient {
+  id               String        @id @default(cuid())
+  userId           String        @unique
+  dateOfBirth      DateTime?
+  phone            String?
+  gender           String?
+  emergencyContact String?
+  medicalHistory   String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments     Appointment[]
+}
+
+model Doctor {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  specialization     String
+  bio                String?
+  slotDurationMins   Int      @default(30)
+  timezone           String   @default("Asia/Kolkata")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workingHours       DoctorWorkingHours[]
+  leaves             DoctorLeave[]
+  appointments       Appointment[]
+  calendarConnection CalendarConnection?
+  @@index([specialization])
+}
+
+model DoctorWorkingHours {
+  id        String    @id @default(cuid())
+  doctorId  String
+  day       DayOfWeek
+  startTime String
+  endTime   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  doctor    Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  @@unique([doctorId, day])
+}
+
+model DoctorLeave {
+  id        String   @id @default(cuid())
+  doctorId  String
+  startsAt  DateTime
+  endsAt    DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  @@index([doctorId, startsAt, endsAt])
+}
+
+model Appointment {
+  id                 String            @id @default(cuid())
+  patientId          String
+  doctorId           String
+  startsAt           DateTime
+  endsAt             DateTime
+  status             AppointmentStatus @default(CONFIRMED)
+  cancellationReason String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  patient            Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  doctor             Doctor            @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  symptomSubmission  SymptomSubmission?
+  prescription       Prescription?
+  calendarEvent      CalendarEvent?
+  notifications      Notification[]
+  // Future booking uses a PostgreSQL interval exclusion constraint, added with
+  // the scheduling migration. This unique key prevents identical start times.
+  @@unique([doctorId, startsAt])
+  @@index([doctorId, startsAt, endsAt])
+  @@index([patientId, startsAt])
+}
+
+model SymptomSubmission {
+  id                String       @id @default(cuid())
+  appointmentId     String       @unique
+  symptoms          String
+  urgencyLevel      UrgencyLevel?
+  chiefComplaint    String?
+  doctorQuestions   String[]
+  llmSummary        String?
+  llmGeneratedAt    DateTime?
+  llmFailureMessage String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  appointment       Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+}
+
+model Prescription {
+  id                     String   @id @default(cuid())
+  appointmentId          String   @unique
+  clinicalNotes          String
+  patientFriendlySummary String?
+  followUpSteps          String?
+  llmGeneratedAt         DateTime?
+  llmFailureMessage      String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  appointment            Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  medications            Medication[]
+}
+
+model Medication {
+  id             String    @id @default(cuid())
+  prescriptionId String
+  name           String
+  dosage         String
+  frequency      String
+  instructions   String?
+  startsOn       DateTime?
+  endsOn         DateTime?
+  reminderTimes  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  notifications  Notification[]
+}
+
+model Notification {
+  id             String              @id @default(cuid())
+  userId         String
+  appointmentId  String?
+  medicationId   String?
+  channel        NotificationChannel
+  type           String
+  status         NotificationStatus  @default(PENDING)
+  scheduledFor   DateTime
+  sentAt         DateTime?
+  attemptCount   Int                 @default(0)
+  lastError      String?
+  idempotencyKey String?             @unique
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointment    Appointment?        @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  medication     Medication?         @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  @@index([status, scheduledFor])
+  @@index([appointmentId])
+  @@index([userId])
+  @@index([idempotencyKey])
+}
+
+model CalendarConnection {
+  id                    String    @id @default(cuid())
+  doctorId              String    @unique
+  provider              String    @default("GOOGLE")
+  calendarId            String?
+  googleEmail           String?
+  scope                 String?
+  status                String    @default("CONNECTED")
+  encryptedAccessToken  String?
+  encryptedRefreshToken String?
+  expiresAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  doctor                Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+}
+
+model CalendarEvent {
+  id             String      @id @default(cuid())
+  appointmentId  String      @unique
+  googleEventId  String?
+  patientEventId String?
+  doctorEventId  String?
+  provider       String      @default("GOOGLE")
+  status         String      @default("NOT_CONNECTED")
+  lastSyncedAt   DateTime?
+  lastError      String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  appointment    Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+}
