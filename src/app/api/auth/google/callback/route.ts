@@ -4,9 +4,13 @@ import { getCurrentUser } from "@/auth/session";
 import { prisma } from "@/database/prisma";
 import { exchangeGoogleCodeForTokens, resolveOAuthRedirectUri } from "@/lib/google/oauth";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 /**
- * Creates a fail-safe HTTP 302 redirect response with HTML/JS fallback.
- * Guarantees that the browser will never remain stuck on a blank page under any circumstance.
+ * Creates a fail-safe HTML/JS redirect bridge response with status 200.
+ * Guarantees that the browser renders the page, executes immediate client navigation,
+ * and will never remain stuck on a blank page under any circumstances or proxy rules.
  */
 function createRedirectResponse(targetUrl: string, error?: string): Response {
   const html = `<!DOCTYPE html>
@@ -26,11 +30,11 @@ function createRedirectResponse(targetUrl: string, error?: string): Response {
 <body>
   <div class="card">
     <div class="spinner"></div>
-    <h3>${error ? "Returning to Dashboard..." : "Connecting Google Calendar..."}</h3>
-    <p style="font-size: 0.875rem; color: #64748b;">
-      ${error ? `Notice: ${error}` : "Redirecting to your dashboard..."}
+    <h3 style="margin-bottom: 0.5rem; font-size: 1.125rem; font-weight: 700;">${error ? "Returning to Dashboard..." : "Connecting Google Calendar..."}</h3>
+    <p style="font-size: 0.875rem; color: #64748b; margin: 0;">
+      ${error ? `Status: ${error}` : "Redirecting you back to your doctor dashboard..."}
     </p>
-    <p style="font-size: 0.8125rem; color: #94a3b8; margin-top: 1rem;">
+    <p style="font-size: 0.8125rem; color: #94a3b8; margin-top: 1.25rem;">
       If you are not redirected automatically, <a href="${targetUrl}">click here to continue</a>.
     </p>
   </div>
@@ -41,10 +45,9 @@ function createRedirectResponse(targetUrl: string, error?: string): Response {
 </html>`;
 
   return new Response(html, {
-    status: 302,
+    status: 200,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      Location: targetUrl,
       "Cache-Control": "no-cache, no-store, must-revalidate",
     },
   });

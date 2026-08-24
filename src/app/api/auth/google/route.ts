@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 import { requireAuth } from "@/auth/rbac";
 import { getGoogleAuthUrl, resolveOAuthRedirectUri } from "@/lib/google/oauth";
 import crypto from "crypto";
-
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth();
