@@ -143,8 +143,7 @@ export async function getDoctorAvailability(
     throw new Error("Doctor not found or inactive.");
   }
 
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const targetDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  const targetDate = createDateTime(dateStr, "12:00");
   const dayOfWeek = getDayOfWeek(targetDate);
 
   const workingHour = doctor.workingHours.find((wh) => wh.day === dayOfWeek);
@@ -163,8 +162,8 @@ export async function getDoctorAvailability(
     };
   }
 
-  const dayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
-  const dayEnd = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+  const dayStart = createDateTime(dateStr, "00:00");
+  const dayEnd = new Date(createDateTime(dateStr, "23:59").getTime() + 59999);
 
   // Fetch leaves overlapping the target date
   const leaves = await prisma.doctorLeave.findMany({

@@ -1,6 +1,6 @@
 import { Prisma, AppointmentStatus } from "@prisma/client";
 import { prisma } from "@/database/prisma";
-import { getDayOfWeek, parseTimeString } from "@/lib/date-utils";
+import { getDayOfWeek, parseTimeString, getTimeInMinutesIST } from "@/lib/date-utils";
 import type { SafeUser } from "@/types/auth";
 import { ForbiddenError } from "@/auth/rbac";
 import type { CreateAppointmentInput } from "@/validation/appointment";
@@ -81,7 +81,7 @@ export async function bookAppointment(patientUserId: string, input: CreateAppoin
   const startMinFromMidnight = startParsed.hours * 60 + startParsed.minutes;
   const endMinFromMidnight = endParsed.hours * 60 + endParsed.minutes;
 
-  const slotStartMins = startsAt.getUTCHours() * 60 + startsAt.getUTCMinutes();
+  const slotStartMins = getTimeInMinutesIST(startsAt);
   const slotEndMins = slotStartMins + doctor.slotDurationMins;
 
   if (slotStartMins < startMinFromMidnight || slotEndMins > endMinFromMidnight) {

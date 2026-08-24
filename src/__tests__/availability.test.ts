@@ -166,4 +166,62 @@ describe("Authoritative Slot Availability Engine", () => {
     // 10:30-11:00 (starts 10:30 > 10:15) -> available
     assert.equal(slots[3].available, true);
   });
+
+  it("should handle multi-day partial leave correctly across boundaries (e.g. 15:00 Day 1 to 15:00 Day 2)", () => {
+    const day1 = "2028-08-25";
+    const day2 = "2028-08-26";
+
+    // Leave from 15:00 on Day 1 to 15:00 on Day 2
+    const leaveStarts = createDateTime(day1, "15:00");
+    const leaveEnds = createDateTime(day2, "15:00");
+    const leaves = [{ startsAt: leaveStarts, endsAt: leaveEnds }];
+
+    // Day 1 (10:00 to 18:00):
+    // Slots 10:00 to 15:00 (10 slots) should be AVAILABLE
+    // Slots 15:00 to 18:00 (6 slots) should be LEAVE
+    const day1Slots = computeDaySlots({
+      dateStr: day1,
+      startTime: "10:00",
+      endTime: "18:00",
+      slotDurationMins: 30,
+      leaves,
+      referenceNow: pastRefDate,
+    });
+
+    assert.equal(day1Slots.length, 16);
+    const day1Available = day1Slots.filter((s) => s.available);
+    const day1Leave = day1Slots.filter((s) => !s.available && s.reason === "LEAVE");
+
+    assert.equal(day1Available.length, 10, "Day 1 slots before 15:00 must be available");
+    assert.equal(day1Leave.length, 6, "Day 1 slots from 15:00 to 18:00 must be on leave");
+    assert.equal(day1Slots[9].formattedTime, "14:30 - 15:00");
+    assert.equal(day1Slots[9].available, true);
+    assert.equal(day1Slots[10].formattedTime, "15:00 - 15:30");
+    assert.equal(day1Slots[10].available, false);
+    assert.equal(day1Slots[10].reason, "LEAVE");
+
+    // Day 2 (10:00 to 18:00):
+    // Slots 10:00 to 15:00 (10 slots) should be LEAVE
+    // Slots 15:00 to 18:00 (6 slots) should be AVAILABLE
+    const day2Slots = computeDaySlots({
+      dateStr: day2,
+      startTime: "10:00",
+      endTime: "18:00",
+      slotDurationMins: 30,
+      leaves,
+      referenceNow: pastRefDate,
+    });
+
+    assert.equal(day2Slots.length, 16);
+    const day2Leave = day2Slots.filter((s) => !s.available && s.reason === "LEAVE");
+    const day2Available = day2Slots.filter((s) => s.available);
+
+    assert.equal(day2Leave.length, 10, "Day 2 slots before 15:00 must be on leave");
+    assert.equal(day2Available.length, 6, "Day 2 slots from 15:00 to 18:00 must be available");
+    assert.equal(day2Slots[9].formattedTime, "14:30 - 15:00");
+    assert.equal(day2Slots[9].available, false);
+    assert.equal(day2Slots[9].reason, "LEAVE");
+    assert.equal(day2Slots[10].formattedTime, "15:00 - 15:30");
+    assert.equal(day2Slots[10].available, true);
+  });
 });

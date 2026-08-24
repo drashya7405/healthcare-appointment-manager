@@ -1,6 +1,7 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { computeDaySlots } from "../services/availability";
+import { createDateTime } from "../lib/date-utils";
 import { generatePreVisitSummary } from "../lib/ai/ai-service";
 import { MockAIProvider } from "../lib/ai/providers/mock";
 import { MockEmailProvider, globalMockEmailProvider } from "../lib/notifications/providers/mock";
@@ -74,8 +75,8 @@ describe("Phase 10: Final Development Verification Suite", () => {
     });
 
     it("should block slots during partial doctor leave", () => {
-      const leaveStart = new Date("2026-09-07T10:00:00Z");
-      const leaveEnd = new Date("2026-09-07T12:00:00Z");
+      const leaveStart = createDateTime("2026-09-07", "10:00");
+      const leaveEnd = createDateTime("2026-09-07", "12:00");
 
       const slots = computeDaySlots({
         dateStr: "2026-09-07",

@@ -11,10 +11,12 @@ const DAY_OF_WEEK_MAP: DayOfWeek[] = [
 ];
 
 /**
- * Returns the Prisma DayOfWeek enum for a given Date object.
+ * Returns the Prisma DayOfWeek enum for a given Date object in Indian Standard Time (IST).
  */
 export function getDayOfWeek(date: Date): DayOfWeek {
-  const dayIndex = date.getUTCDay(); // 0 = Sunday, 1 = Monday, ... (UTC authoritative)
+  // IST is UTC + 5:30 (+330 minutes)
+  const istDate = new Date(date.getTime() + 330 * 60 * 1000);
+  const dayIndex = istDate.getUTCDay(); // 0 = Sunday, 1 = Monday, ...
   return DAY_OF_WEEK_MAP[dayIndex];
 }
 
@@ -34,12 +36,26 @@ export function parseTimeString(timeStr: string): { hours: number; minutes: numb
 }
 
 /**
- * Combines a date string ("YYYY-MM-DD") and a time string ("HH:MM") into a Date object.
+ * Combines a date string ("YYYY-MM-DD") and a time string ("HH:MM") into an authoritative Date object
+ * in Indian Standard Time (IST, UTC+05:30).
  */
 export function createDateTime(dateStr: string, timeStr: string): Date {
   const [year, month, day] = dateStr.split("-").map(Number);
   const { hours, minutes } = parseTimeString(timeStr);
-  return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0));
+  const y = year.toString().padStart(4, "0");
+  const m = month.toString().padStart(2, "0");
+  const d = day.toString().padStart(2, "0");
+  const h = hours.toString().padStart(2, "0");
+  const min = minutes.toString().padStart(2, "0");
+  return new Date(`${y}-${m}-${d}T${h}:${min}:00+05:30`);
+}
+
+/**
+ * Returns the minute of the day (0..1439) in Indian Standard Time (IST) for a given Date object.
+ */
+export function getTimeInMinutesIST(date: Date): number {
+  const istDate = new Date(date.getTime() + 330 * 60 * 1000);
+  return istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
 }
 
 /**
@@ -62,11 +78,15 @@ export function formatDateUTC(date: Date): string {
 }
 
 /**
- * Returns tomorrow's date string YYYY-MM-DD in UTC.
+ * Returns tomorrow's date string YYYY-MM-DD in Indian Standard Time (IST).
  */
 export function getTomorrowDateString(): string {
-  const tomorrow = new Date(Date.now() + 86400000);
-  return formatDateUTC(tomorrow);
+  const istDate = new Date(Date.now() + 330 * 60 * 1000);
+  istDate.setUTCDate(istDate.getUTCDate() + 1);
+  const year = istDate.getUTCFullYear();
+  const month = (istDate.getUTCMonth() + 1).toString().padStart(2, "0");
+  const day = istDate.getUTCDate().toString().padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 /**
