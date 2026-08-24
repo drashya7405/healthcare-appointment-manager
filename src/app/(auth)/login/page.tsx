@@ -13,36 +13,6 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const demoAccounts = [
-    {
-      role: "Admin",
-      email: "admin@example.com",
-      pass: "AdminPass123!",
-      desc: "Manage doctors & platform",
-      color: "border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100",
-    },
-    {
-      role: "Doctor",
-      email: "doctor.smith@example.com",
-      pass: "DoctorPass123!",
-      desc: "Cardiology, working hours",
-      color: "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100",
-    },
-    {
-      role: "Patient",
-      email: "patient.doe@example.com",
-      pass: "PatientPass123!",
-      desc: "Bookings & medical profile",
-      color: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
-    },
-  ];
-
-  function fillDemo(e: string, p: string) {
-    setEmail(e);
-    setPassword(p);
-    setError(null);
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -59,6 +29,7 @@ function LoginForm() {
 
       if (!res.ok || !data.success) {
         setError(data?.error?.message || "Invalid email or password.");
+        setLoading(false);
         return;
       }
 
@@ -77,7 +48,7 @@ function LoginForm() {
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-bold text-slate-900">Sign in to your account</h1>
           <p className="mt-1.5 text-sm text-slate-500">
-            Enter your credentials or choose a quick-fill demo account
+            Enter your email and password to access your dashboard
           </p>
         </div>
 
@@ -124,30 +95,6 @@ function LoginForm() {
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
-
-        <div className="mt-6 border-t border-slate-200 pt-6">
-          <p className="text-xs font-medium text-slate-500 mb-3 uppercase tracking-wider text-center">
-            Quick Development Accounts
-          </p>
-          <div className="grid gap-2">
-            {demoAccounts.map((acc) => (
-              <button
-                key={acc.role}
-                type="button"
-                onClick={() => fillDemo(acc.email, acc.pass)}
-                className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition cursor-pointer ${acc.color}`}
-              >
-                <div>
-                  <span className="font-bold">{acc.role}:</span> {acc.email}
-                  <div className="text-[11px] opacity-80">{acc.desc}</div>
-                </div>
-                <span className="text-[10px] uppercase font-semibold bg-white/70 px-2 py-0.5 rounded shadow-2xs">
-                  Fill
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
 
         <p className="mt-6 text-center text-xs text-slate-500">
           New patient?{" "}

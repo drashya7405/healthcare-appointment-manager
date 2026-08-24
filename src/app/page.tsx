@@ -53,7 +53,7 @@ export default async function Home() {
               href="/login"
               className="rounded-xl bg-teal-600 px-6 py-3 text-sm font-bold text-white shadow-sm hover:bg-teal-700 transition"
             >
-              Sign In / 1-Click Demo Logins
+              Sign In
             </Link>
             <Link
               href="/register"
