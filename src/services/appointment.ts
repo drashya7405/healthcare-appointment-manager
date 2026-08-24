@@ -91,28 +91,28 @@ export async function bookAppointment(patientUserId: string, input: CreateAppoin
   try {
     const appointment = await prisma.$transaction(
       async (tx) => {
-        // 1. Check for doctor leaves during slot
-        const leaveConflict = await tx.doctorLeave.findFirst({
-          where: {
-            doctorId: input.doctorId,
-            startsAt: { lt: endsAt },
-            endsAt: { gt: startsAt },
-          },
-        });
+        // 1 & 2. Check for doctor leaves and active appointment conflicts concurrently
+        const [leaveConflict, activeConflict] = await Promise.all([
+          tx.doctorLeave.findFirst({
+            where: {
+              doctorId: input.doctorId,
+              startsAt: { lt: endsAt },
+              endsAt: { gt: startsAt },
+            },
+          }),
+          tx.appointment.findFirst({
+            where: {
+              doctorId: input.doctorId,
+              status: { notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED] },
+              startsAt: { lt: endsAt },
+              endsAt: { gt: startsAt },
+            },
+          }),
+        ]);
 
         if (leaveConflict) {
           throw new SlotUnavailableError("The doctor is on leave during this time.");
         }
-
-        // 2. Check for active appointment conflicts
-        const activeConflict = await tx.appointment.findFirst({
-          where: {
-            doctorId: input.doctorId,
-            status: { notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED] },
-            startsAt: { lt: endsAt },
-            endsAt: { gt: startsAt },
-          },
-        });
 
         if (activeConflict) {
           throw new SlotUnavailableError(
@@ -153,6 +153,8 @@ export async function bookAppointment(patientUserId: string, input: CreateAppoin
       },
       {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 10000,
+        timeout: 20000,
       }
     );
 
@@ -312,29 +314,29 @@ export async function rescheduleAppointment(
   try {
     const rescheduled = await prisma.$transaction(
       async (tx) => {
-        // Check for leave collision
-        const leaveConflict = await tx.doctorLeave.findFirst({
-          where: {
-            doctorId: existing.doctorId,
-            startsAt: { lt: newEndsAt },
-            endsAt: { gt: newStartsAt },
-          },
-        });
+        // Check for leave collision and active appointment collisions concurrently
+        const [leaveConflict, apptConflict] = await Promise.all([
+          tx.doctorLeave.findFirst({
+            where: {
+              doctorId: existing.doctorId,
+              startsAt: { lt: newEndsAt },
+              endsAt: { gt: newStartsAt },
+            },
+          }),
+          tx.appointment.findFirst({
+            where: {
+              id: { not: appointmentId },
+              doctorId: existing.doctorId,
+              status: { notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED] },
+              startsAt: { lt: newEndsAt },
+              endsAt: { gt: newStartsAt },
+            },
+          }),
+        ]);
 
         if (leaveConflict) {
           throw new SlotUnavailableError("The doctor is on leave during the requested new time.");
         }
-
-        // Check for active appointment collisions (excluding the appointment itself)
-        const apptConflict = await tx.appointment.findFirst({
-          where: {
-            id: { not: appointmentId },
-            doctorId: existing.doctorId,
-            status: { notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED] },
-            startsAt: { lt: newEndsAt },
-            endsAt: { gt: newStartsAt },
-          },
-        });
 
         if (apptConflict) {
           throw new SlotUnavailableError(
@@ -363,6 +365,8 @@ export async function rescheduleAppointment(
       },
       {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 10000,
+        timeout: 20000,
       }
     );
 
