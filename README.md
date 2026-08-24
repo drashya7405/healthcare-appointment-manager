@@ -28,7 +28,22 @@ The **Healthcare Appointment & Follow-up Manager** unifies patient scheduling, c
 
 ---
 
-## 2. Key Implemented Features
+## 2. Demo & Assignment Evaluation Credentials
+
+The system includes pre-seeded demo accounts for assignment evaluation across all three user roles:
+
+| User Role | Full Name | Email Address | Password | Target Dashboard |
+| :--- | :--- | :--- | :--- | :--- |
+| **ADMIN** | System Administrator | `admin@example.com` | `AdminPass123!` | [`/admin/dashboard`](https://healthcare-appointment-manager.vercel.app/admin/dashboard) |
+| **DOCTOR (Cardiology)** | Dr. Sarah Smith | `doctor.smith@example.com` | `DoctorPass123!` | [`/doctor/dashboard`](https://healthcare-appointment-manager.vercel.app/doctor/dashboard) |
+| **DOCTOR (Dermatology)** | Dr. Michael Jones | `doctor.jones@example.com` | `DoctorPass123!` | [`/doctor/dashboard`](https://healthcare-appointment-manager.vercel.app/doctor/dashboard) |
+| **PATIENT (Example)** | John Doe | `patient.doe@example.com` | `PatientPass123!` | [`/patient/dashboard`](https://healthcare-appointment-manager.vercel.app/patient/dashboard) |
+
+> **Note**: Evaluators can log in using these credentials directly on the [Production Deployment](https://healthcare-appointment-manager.vercel.app/login) or seed them locally using `npx prisma db seed`. New patients can also register freely at [`/register`](https://healthcare-appointment-manager.vercel.app/register).
+
+---
+
+## 3. Key Implemented Features
 
 - **Authentication & RBAC**: Database-backed session tokens (32-byte crypto), bcrypt password hashing (12 salt rounds), strict role boundaries (`PATIENT`, `DOCTOR`, `ADMIN`).
 - **Doctor Specialization & Directory**: Filterable doctor catalog with specialization tags, bios, and consultation durations.
@@ -44,7 +59,7 @@ The **Healthcare Appointment & Follow-up Manager** unifies patient scheduling, c
 
 ---
 
-## 3. System Architecture
+## 4. System Architecture
 
 ```mermaid
 graph TD
@@ -75,7 +90,7 @@ graph TD
 
 ---
 
-## 4. Documentation Index
+## 5. Documentation Index
 
 Comprehensive technical documentation is organized in the [`docs/`](./docs/) directory:
 
@@ -92,7 +107,7 @@ Comprehensive technical documentation is organized in the [`docs/`](./docs/) dir
 
 ---
 
-## 5. Local Development Setup
+## 6. Local Development Setup
 
 ### Prerequisites
 - **Node.js**: v20.x or higher
@@ -141,7 +156,7 @@ Comprehensive technical documentation is organized in the [`docs/`](./docs/) dir
 
 ---
 
-## 6. Test Suite Results
+## 7. Test Suite Results
 
 ```text
 # Tests: 125 passed, 0 failed, 59 suites (npm test)
