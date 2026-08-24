@@ -31,7 +31,13 @@ export class BrevoEmailProvider implements EmailProvider {
   }
 
   async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
+      console.log("[Email] Provider=brevo");
+      console.log("[Email] Attempting transactional email");
+
       const sender = this.parseEmailAddress(options.from || this.defaultFrom);
       const toList = Array.isArray(options.to) ? options.to : [options.to];
       const recipients = toList.map((t) => this.parseEmailAddress(t));
@@ -55,13 +61,17 @@ export class BrevoEmailProvider implements EmailProvider {
           "content-type": "application/json",
         },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+
+      console.log(`[Email] Brevo response status=${response.status}`);
 
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
         const errorMsg =
           data?.message || data?.code || `Brevo API returned error status ${response.status}`;
+        console.error(`[Email] Brevo request failed: ${errorMsg}`);
         return {
           success: false,
           error: errorMsg,
@@ -70,14 +80,20 @@ export class BrevoEmailProvider implements EmailProvider {
 
       return {
         success: true,
-        messageId: data?.messageId,
+        messageId: data?.messageId || "brevo-sent",
       };
     } catch (err) {
-      const errorMsg = (err as Error).message || "Unknown error during Brevo email dispatch.";
+      const isAbort = (err as Error).name === "AbortError";
+      const errorMsg = isAbort
+        ? "Brevo API request timed out after 15 seconds."
+        : (err as Error).message || "Unknown error during Brevo email dispatch.";
+      console.error(`[Email] Brevo request failed: ${errorMsg}`);
       return {
         success: false,
         error: errorMsg,
       };
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 }

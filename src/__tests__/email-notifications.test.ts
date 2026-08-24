@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { MockEmailProvider, globalMockEmailProvider } from "../lib/notifications/providers/mock";
 import { BrevoEmailProvider } from "../lib/notifications/providers/brevo";
 import { ResendEmailProvider } from "../lib/notifications/providers/resend";
+import { getEmailProvider } from "../lib/notifications/email-service";
 import { renderPatientBookingConfirmation, renderDoctorBookingNotification } from "../lib/notifications/templates/booking-confirmation";
 import { renderAppointmentReminder } from "../lib/notifications/templates/appointment-reminder";
 import { renderAppointmentCancellation } from "../lib/notifications/templates/appointment-cancellation";
@@ -11,6 +12,7 @@ import { renderDoctorLeaveConflict } from "../lib/notifications/templates/doctor
 
 describe("Phase 7: Email Notifications System", () => {
   const originalEnv = { ...process.env };
+  const originalFetch = global.fetch;
 
   beforeEach(() => {
     process.env.EMAIL_PROVIDER = "mock";
@@ -20,6 +22,7 @@ describe("Phase 7: Email Notifications System", () => {
 
   afterEach(() => {
     process.env = { ...originalEnv };
+    global.fetch = originalFetch;
   });
 
   describe("1. Template Rendering Engine", () => {
@@ -171,9 +174,91 @@ describe("Phase 7: Email Notifications System", () => {
 
       process.env.BREVO_API_KEY = currentKey;
     });
+
+    it("should send email successfully via Brevo API when response is 201 Created", async () => {
+      global.fetch = async (input: unknown, init?: unknown) => {
+        const reqInit = init as RequestInit;
+        assert.equal(reqInit.method, "POST");
+        assert.ok((reqInit.headers as Record<string, string>)["api-key"]);
+        return new Response(JSON.stringify({ messageId: "brevo-msg-12345" }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        });
+      };
+
+      const provider = new BrevoEmailProvider("xkeysib_test_key_123");
+      const result = await provider.sendEmail({
+        to: "patient@example.com",
+        subject: "Confirmation",
+        html: "<p>Confirmed</p>",
+      });
+
+      assert.equal(result.success, true);
+      assert.equal(result.messageId, "brevo-msg-12345");
+    });
+
+    it("should handle Brevo API error response (e.g. 401 Unauthorized)", async () => {
+      global.fetch = async () => {
+        return new Response(JSON.stringify({ message: "Key not found", code: "unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      };
+
+      const provider = new BrevoEmailProvider("xkeysib_invalid_key");
+      const result = await provider.sendEmail({
+        to: "patient@example.com",
+        subject: "Confirmation",
+        html: "<p>Confirmed</p>",
+      });
+
+      assert.equal(result.success, false);
+      assert.ok(result.error?.includes("Key not found"));
+    });
+
+    it("should handle network exception/timeout safely", async () => {
+      global.fetch = async () => {
+        throw new Error("getaddrinfo ENOTFOUND api.brevo.com");
+      };
+
+      const provider = new BrevoEmailProvider("xkeysib_test_key");
+      const result = await provider.sendEmail({
+        to: "patient@example.com",
+        subject: "Confirmation",
+        html: "<p>Confirmed</p>",
+      });
+
+      assert.equal(result.success, false);
+      assert.ok(result.error?.includes("getaddrinfo ENOTFOUND"));
+    });
   });
 
-  describe("4. Resend Provider Safety & Error Handling", () => {
+  describe("4. Provider Selection & No Silent Mock Fallback", () => {
+    it("should return failing provider and NOT silently fall back to mock when EMAIL_PROVIDER=brevo but BREVO_API_KEY is missing", async () => {
+      process.env.EMAIL_PROVIDER = "brevo";
+      delete process.env.BREVO_API_KEY;
+
+      const provider = getEmailProvider();
+      assert.equal(provider.name, "brevo");
+
+      const result = await provider.sendEmail({
+        to: "patient@example.com",
+        subject: "Test",
+        html: "<p>Test</p>",
+      });
+
+      assert.equal(result.success, false);
+      assert.ok(result.error?.includes("BREVO_API_KEY is not configured"));
+    });
+
+    it("should return globalMockEmailProvider when EMAIL_PROVIDER=mock", () => {
+      process.env.EMAIL_PROVIDER = "mock";
+      const provider = getEmailProvider();
+      assert.equal(provider.name, "mock");
+    });
+  });
+
+  describe("5. Resend Provider Safety & Error Handling", () => {
     it("should instantiate ResendEmailProvider when API key is provided", () => {
       const provider = new ResendEmailProvider("re_test_key_123");
       assert.equal(provider.name, "resend");
@@ -191,7 +276,7 @@ describe("Phase 7: Email Notifications System", () => {
     });
   });
 
-  describe("5. Critical Reliability & Non-Blocking Isolation", () => {
+  describe("6. Critical Reliability & Non-Blocking Isolation", () => {
     it("should preserve booking and continue when email dispatch fails", async () => {
       process.env.EMAIL_MOCK_FAILURE = "true";
       const provider = new MockEmailProvider();
@@ -202,11 +287,9 @@ describe("Phase 7: Email Notifications System", () => {
         html: "<p>Booked</p>",
       });
 
-      // Email dispatch fails
       assert.equal(sendResult.success, false);
       assert.ok(sendResult.error);
 
-      // Crucial assertion: Transaction caller receives error status without unhandled exceptions
       const notificationStatus = sendResult.success ? "SENT" : "FAILED";
       assert.equal(notificationStatus, "FAILED");
     });

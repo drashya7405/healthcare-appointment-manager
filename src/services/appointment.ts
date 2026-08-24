@@ -163,15 +163,19 @@ export async function bookAppointment(patientUserId: string, input: CreateAppoin
       console.warn("Background AI summary failed:", e)
     );
 
-    // Trigger non-blocking Booking Confirmation email to Patient & Doctor
-    sendBookingConfirmation(appointment.id).catch((e) =>
-      console.warn("Background email notification failed:", e)
-    );
+    // Trigger Booking Confirmation email to Patient & Doctor (safely caught so booking never fails)
+    try {
+      await sendBookingConfirmation(appointment.id);
+    } catch (e) {
+      console.warn("[Email Notification] Booking confirmation dispatch error:", e);
+    }
 
-    // Trigger non-blocking Google Calendar synchronization
-    syncAppointmentToCalendar(appointment.id).catch((e) =>
-      console.warn("Background Google Calendar sync failed:", e)
-    );
+    // Trigger Google Calendar synchronization
+    try {
+      await syncAppointmentToCalendar(appointment.id);
+    } catch (e) {
+      console.warn("Google Calendar sync error:", e);
+    }
 
     return appointment;
   } catch (error) {
@@ -236,15 +240,19 @@ export async function cancelAppointment(
     },
   });
 
-  // Trigger non-blocking Cancellation notification
-  sendCancellationNotice(appointmentId, reason).catch((e) =>
-    console.warn("Background cancellation email failed:", e)
-  );
+  // Trigger Cancellation notification (safely caught)
+  try {
+    await sendCancellationNotice(appointmentId, reason);
+  } catch (e) {
+    console.warn("[Email Notification] Cancellation email failed:", e);
+  }
 
-  // Trigger non-blocking Google Calendar event cancellation/deletion
-  deleteAppointmentCalendarEvent(appointmentId).catch((e) =>
-    console.warn("Background Google Calendar deletion failed:", e)
-  );
+  // Trigger Google Calendar event cancellation/deletion
+  try {
+    await deleteAppointmentCalendarEvent(appointmentId);
+  } catch (e) {
+    console.warn("Google Calendar deletion failed:", e);
+  }
 
   return updated;
 }
@@ -370,15 +378,19 @@ export async function rescheduleAppointment(
       }
     );
 
-    // Trigger non-blocking Reschedule notification
-    sendRescheduleNotice(appointmentId, existing.startsAt).catch((e) =>
-      console.warn("Background reschedule email failed:", e)
-    );
+    // Trigger Reschedule notification (safely caught)
+    try {
+      await sendRescheduleNotice(appointmentId, existing.startsAt);
+    } catch (e) {
+      console.warn("[Email Notification] Reschedule email failed:", e);
+    }
 
-    // Trigger non-blocking Google Calendar event update
-    updateAppointmentCalendarEvent(appointmentId).catch((e) =>
-      console.warn("Background Google Calendar update failed:", e)
-    );
+    // Trigger Google Calendar event update
+    try {
+      await updateAppointmentCalendarEvent(appointmentId);
+    } catch (e) {
+      console.warn("Google Calendar update failed:", e);
+    }
 
     return rescheduled;
   } catch (error) {

@@ -82,11 +82,13 @@ export async function POST(
       return { createdLeave, conflictingAppointmentIds: conflictingAppointments.map((a) => a.id) };
     });
 
-    // Send notifications outside transaction
+    // Send notifications outside transaction (safely caught)
     for (const apptId of leave.conflictingAppointmentIds) {
-      sendDoctorLeaveConflictNotice(apptId, validatedData.reason).catch((e) =>
-        console.warn("Background leave conflict email failed:", e)
-      );
+      try {
+        await sendDoctorLeaveConflictNotice(apptId, validatedData.reason);
+      } catch (e) {
+        console.warn("[Email Notification] Leave conflict email error:", e);
+      }
     }
 
     return successResponse(
