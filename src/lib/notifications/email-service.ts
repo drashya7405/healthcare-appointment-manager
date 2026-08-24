@@ -1,5 +1,6 @@
 import { prisma } from "@/database/prisma";
 import type { EmailProvider } from "./providers/types";
+import { BrevoEmailProvider } from "./providers/brevo";
 import { ResendEmailProvider } from "./providers/resend";
 import { globalMockEmailProvider } from "./providers/mock";
 import { NotificationChannel, NotificationStatus } from "@prisma/client";
@@ -18,6 +19,15 @@ import { renderMedicationReminder } from "./templates/medication-reminder";
  */
 export function getEmailProvider(): EmailProvider {
   const provider = (process.env.EMAIL_PROVIDER || "mock").toLowerCase();
+
+  if (provider === "brevo" && process.env.BREVO_API_KEY) {
+    try {
+      return new BrevoEmailProvider();
+    } catch (err) {
+      console.warn("Falling back to MockEmailProvider due to Brevo init error:", (err as Error).message);
+      return globalMockEmailProvider;
+    }
+  }
 
   if (provider === "resend" && process.env.RESEND_API_KEY) {
     try {

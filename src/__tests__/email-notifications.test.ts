@@ -1,6 +1,7 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { MockEmailProvider, globalMockEmailProvider } from "../lib/notifications/providers/mock";
+import { BrevoEmailProvider } from "../lib/notifications/providers/brevo";
 import { ResendEmailProvider } from "../lib/notifications/providers/resend";
 import { renderPatientBookingConfirmation, renderDoctorBookingNotification } from "../lib/notifications/templates/booking-confirmation";
 import { renderAppointmentReminder } from "../lib/notifications/templates/appointment-reminder";
@@ -154,7 +155,25 @@ describe("Phase 7: Email Notifications System", () => {
     });
   });
 
-  describe("3. Resend Provider Safety & Error Handling", () => {
+  describe("3. Brevo Provider Safety & Error Handling", () => {
+    it("should instantiate BrevoEmailProvider when API key is provided", () => {
+      const provider = new BrevoEmailProvider("xkeysib_test_key_123");
+      assert.equal(provider.name, "brevo");
+    });
+
+    it("should throw a clear error when BREVO_API_KEY is missing", () => {
+      const currentKey = process.env.BREVO_API_KEY;
+      delete process.env.BREVO_API_KEY;
+
+      assert.throws(() => {
+        new BrevoEmailProvider();
+      }, /BREVO_API_KEY is not configured/);
+
+      process.env.BREVO_API_KEY = currentKey;
+    });
+  });
+
+  describe("4. Resend Provider Safety & Error Handling", () => {
     it("should instantiate ResendEmailProvider when API key is provided", () => {
       const provider = new ResendEmailProvider("re_test_key_123");
       assert.equal(provider.name, "resend");
@@ -172,7 +191,7 @@ describe("Phase 7: Email Notifications System", () => {
     });
   });
 
-  describe("4. Critical Reliability & Non-Blocking Isolation", () => {
+  describe("5. Critical Reliability & Non-Blocking Isolation", () => {
     it("should preserve booking and continue when email dispatch fails", async () => {
       process.env.EMAIL_MOCK_FAILURE = "true";
       const provider = new MockEmailProvider();
