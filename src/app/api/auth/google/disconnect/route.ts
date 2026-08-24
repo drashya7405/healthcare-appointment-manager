@@ -3,6 +3,9 @@ import { disconnectDoctorGoogleCalendar } from "@/lib/google/oauth";
 import { successResponse } from "@/lib/api-response";
 import { handleApiError } from "@/lib/errors";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function POST() {
   try {
     const user = await requireDoctor();

@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getCurrentUser } from "@/auth/session";
 import { prisma } from "@/database/prisma";
@@ -6,52 +6,6 @@ import { exchangeGoogleCodeForTokens, resolveOAuthRedirectUri } from "@/lib/goog
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-/**
- * Creates a fail-safe HTML/JS redirect bridge response with status 200.
- * Guarantees that the browser renders the page, executes immediate client navigation,
- * and will never remain stuck on a blank page under any circumstances or proxy rules.
- */
-function createRedirectResponse(targetUrl: string, error?: string): Response {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="refresh" content="0;url=${targetUrl}">
-  <title>Redirecting to Doctor Dashboard...</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #f8fafc; color: #334155; }
-    .card { background: white; padding: 2rem; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); text-align: center; max-width: 420px; }
-    .spinner { border: 3px solid #e2e8f0; border-top: 3px solid #0d9488; border-radius: 50%; width: 28px; height: 28px; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    a { color: #0d9488; text-decoration: none; font-weight: 600; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="spinner"></div>
-    <h3 style="margin-bottom: 0.5rem; font-size: 1.125rem; font-weight: 700;">${error ? "Returning to Dashboard..." : "Connecting Google Calendar..."}</h3>
-    <p style="font-size: 0.875rem; color: #64748b; margin: 0;">
-      ${error ? `Status: ${error}` : "Redirecting you back to your doctor dashboard..."}
-    </p>
-    <p style="font-size: 0.8125rem; color: #94a3b8; margin-top: 1.25rem;">
-      If you are not redirected automatically, <a href="${targetUrl}">click here to continue</a>.
-    </p>
-  </div>
-  <script>
-    window.location.replace(${JSON.stringify(targetUrl)});
-  </script>
-</body>
-</html>`;
-
-  return new Response(html, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-    },
-  });
-}
 
 export async function GET(request: NextRequest) {
   const requestOrigin = request.nextUrl.origin;
@@ -70,13 +24,13 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.warn(`[OAuth Callback] Google authorization returned error: ${error}`);
       errorUrl.searchParams.set("google_error", error);
-      return createRedirectResponse(errorUrl.toString(), error);
+      return NextResponse.redirect(errorUrl, 302);
     }
 
     if (!code || !state) {
       console.warn("[OAuth Callback] Missing code or state parameter in callback URL");
       errorUrl.searchParams.set("google_error", "missing_code_or_state");
-      return createRedirectResponse(errorUrl.toString(), "Missing OAuth code or state parameter");
+      return NextResponse.redirect(errorUrl, 302);
     }
 
     const cookieStore = await cookies();
@@ -91,7 +45,7 @@ export async function GET(request: NextRequest) {
     if (storedState && storedState !== state) {
       console.warn("[OAuth Callback] State mismatch detected");
       errorUrl.searchParams.set("google_error", "invalid_csrf_state");
-      return createRedirectResponse(errorUrl.toString(), "Invalid CSRF state token");
+      return NextResponse.redirect(errorUrl, 302);
     }
 
     // Clear state cookie
@@ -111,7 +65,7 @@ export async function GET(request: NextRequest) {
       console.warn("[OAuth Callback] No active session found, redirecting to login");
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("redirect", "/doctor/dashboard");
-      return createRedirectResponse(loginUrl.toString(), "Session expired, please log in");
+      return NextResponse.redirect(loginUrl, 302);
     }
 
     let doctorId: string | null = null;
@@ -127,7 +81,7 @@ export async function GET(request: NextRequest) {
     if (!doctorId) {
       console.warn("[OAuth Callback] User is not associated with a doctor profile");
       errorUrl.searchParams.set("google_error", "no_doctor_profile");
-      return createRedirectResponse(errorUrl.toString(), "No doctor profile associated with current account");
+      return NextResponse.redirect(errorUrl, 302);
     }
 
     const redirectUri = resolveOAuthRedirectUri(requestOrigin);
@@ -167,11 +121,11 @@ export async function GET(request: NextRequest) {
     successUrl.searchParams.set("google_calendar", "connected");
     console.log(`[OAuth Callback] Redirecting to success destination: ${successUrl.pathname}${successUrl.search}`);
 
-    return createRedirectResponse(successUrl.toString());
+    return NextResponse.redirect(successUrl, 302);
   } catch (err) {
     const errorMsg = (err as Error).message || "Token exchange failed";
     console.error("[OAuth Callback] Exception during callback processing:", errorMsg);
     errorUrl.searchParams.set("google_error", errorMsg);
-    return createRedirectResponse(errorUrl.toString(), errorMsg);
+    return NextResponse.redirect(errorUrl, 302);
   }
 }
