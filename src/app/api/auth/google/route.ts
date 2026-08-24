@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { requireAuth } from "@/auth/rbac";
-import { getGoogleAuthUrl } from "@/lib/google/oauth";
+import { getGoogleAuthUrl, resolveOAuthRedirectUri } from "@/lib/google/oauth";
 import crypto from "crypto";
 
 export async function GET(request: NextRequest) {
@@ -24,8 +24,8 @@ export async function GET(request: NextRequest) {
     });
 
     const origin = request.nextUrl.origin;
-    const dynamicRedirectUri = `${origin}/api/auth/google/callback`;
-    const authUrl = getGoogleAuthUrl(state, process.env.GOOGLE_REDIRECT_URI || dynamicRedirectUri);
+    const redirectUri = resolveOAuthRedirectUri(origin);
+    const authUrl = getGoogleAuthUrl(state, redirectUri);
 
     return NextResponse.redirect(authUrl);
   } catch {

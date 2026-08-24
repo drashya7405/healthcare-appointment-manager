@@ -8,17 +8,29 @@ const CALENDAR_SCOPES = [
 ];
 
 /**
+ * Resolves the appropriate Redirect URI for OAuth based on environment and request origin.
+ */
+export function resolveOAuthRedirectUri(requestOrigin?: string): string {
+  const envUri = process.env.GOOGLE_REDIRECT_URI;
+  if (envUri && !envUri.includes("localhost")) {
+    return envUri;
+  }
+  if (requestOrigin && !requestOrigin.includes("localhost")) {
+    return `${requestOrigin.replace(/\/$/, "")}/api/auth/google/callback`;
+  }
+  if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost")) {
+    return `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/api/auth/google/callback`;
+  }
+  return envUri || "http://localhost:3000/api/auth/google/callback";
+}
+
+/**
  * Returns a configured Google OAuth2 Client instance.
  */
 export function createOAuth2Client(customRedirectUri?: string) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri =
-    customRedirectUri ||
-    process.env.GOOGLE_REDIRECT_URI ||
-    (process.env.NEXT_PUBLIC_APP_URL
-      ? `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/api/auth/google/callback`
-      : "http://localhost:3000/api/auth/google/callback");
+  const redirectUri = customRedirectUri || resolveOAuthRedirectUri();
 
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
@@ -54,12 +66,29 @@ export async function exchangeGoogleCodeForTokens(
   oauth2Client.setCredentials(tokens);
 
   let googleEmail: string | null = null;
-  try {
-    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
-    const userInfo = await oauth2.userinfo.get();
-    googleEmail = userInfo.data.email || null;
-  } catch {
-    // Non-critical if userinfo email lookup fails
+
+  // 1. Fast decode from JWT id_token without network overhead
+  if (tokens.id_token) {
+    try {
+      const parts = tokens.id_token.split(".");
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+        googleEmail = payload.email || null;
+      }
+    } catch {
+      // Non-critical fallback
+    }
+  }
+
+  // 2. Fallback to userInfo endpoint if id_token was absent
+  if (!googleEmail) {
+    try {
+      const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+      const userInfo = await oauth2.userinfo.get();
+      googleEmail = userInfo.data.email || null;
+    } catch {
+      // Non-critical if userinfo email lookup fails
+    }
   }
 
   return {
